@@ -2,8 +2,18 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Dropout, LayerNormalization
 import ROOT
-import wandb
-wandb.init(project="physics")
+# import matplotlib.pyplot as plt
+import datetime
+
+import data
+
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+
+# import wandb
+# wandb.init(project="physics")
 
 # lep1 *4
 # lep2 *4
@@ -19,7 +29,7 @@ wandb.init(project="physics")
 
 def getModel():
     model = keras.Sequential()
-    model.add(Dense(100, activation='elu', input_shape=(31,1)))
+    model.add(Dense(75, activation='elu', input_shape=(31,)))
     model.add(LayerNormalization())
     model.add(Dropout(0.1))
     for _ in range(9):
@@ -33,42 +43,65 @@ def getModel():
 
 
 # Define loass function and optimizer
-loss_func = tf.keras.losses.SparseCategoricalCrossentropy()
-optimizer = tf.keras.optimizers.Adam()
+loss_func = tf.keras.losses.CategoricalCrossentropy()
+optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5)
 
 # Average the loss across the batch size within an epoch
 train_loss = tf.keras.metrics.Mean(name="train_loss")
 valid_loss = tf.keras.metrics.Mean(name="test_loss")
 
 # Specify the performance metric
-train_acc = tf.keras.metrics.SparseCategoricalAccuracy(name="train_acc")
-valid_acc = tf.keras.metrics.SparseCategoricalAccuracy(name="valid_acc")
+train_acc = tf.keras.metrics.CategoricalAccuracy(name="train_acc")
+valid_acc = tf.keras.metrics.CategoricalAccuracy(name="valid_acc")
 
 
-@tf.function
-def model_train(features, labels):
-    with tf.GradientTape() as tape:
-        predictions = model(features)
-        loss = loss_func(labels, predictions)
+generator = data.dataGenerator(batch_size=64)
+
+# @tf.function
+# def model_train(features, labels):
+#     with tf.GradientTape() as tape:
+#         predictions = model(features)
+#         loss = loss_func(labels, predictions)
     
-    gradients = tape.gradient(loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+#     gradients = tape.gradient(loss, model.trainable_variables)
+#     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-    train_loss(loss)
-    train_acc(labels, predictions)
+#     train_loss(loss)
+#     train_acc(labels, predictions)
 
 
-@tf.function
-def model_validate(features, labels):
-    predictions = model(features)
-    v_loss = loss_func(labels, predictions)
-    valid_loss(v_loss)
-    valid_acc(labels, predictions)
+# @tf.function
+# def model_validate(features, labels):
+#     predictions = model(features)
+#     v_loss = loss_func(labels, predictions)
+#     valid_loss(v_loss)
+#     valid_acc(labels, predictions)
 
 
 
 
 model = getModel()
+model.compile(
+    optimizer=optimizer,
+    loss=loss_func,
+    metrics=['accuracy']
+)
+
+model.summary()
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+a = next(generator)
+print(type(a))
+b, c = a
+print(type(b), b.shape)
+print(type(c), c.shape)
+H = model.fit(
+    x = generator,
+    steps_per_epoch=1000,
+    epochs=50,
+    callbacks=[tensorboard_callback]
+)
 
 
 

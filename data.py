@@ -1,10 +1,11 @@
 import ROOT
-# import tensorflow as tf
+import tensorflow as tf
 import inspect
 import os
 import array
 from collections import OrderedDict
 import random
+import numpy as np
 
 # list of files
 # list of branch names
@@ -40,7 +41,7 @@ def dataGenerator(batch_size, mode="train"):
         branches[key] = array.array(type, num*[0])
             
 
-    basePath = "/home/sebastian/Dokumente/Docker/rootFiles/"
+    basePath = "/home/sebastian/rootFiles/"
     fileList = os.listdir(basePath)
     ggfSet = {x for x in fileList if "GluGluH" in x}
     vbfSet = {x for x in fileList if "VBFH" in x}
@@ -98,30 +99,42 @@ def dataGenerator(batch_size, mode="train"):
             for key, value in branches.items():
                 trees[i].SetBranchAddress(key, value)
 
-            trees[i].GetEntry(treePositions[i])
-            treePositions[i] += 1
-
             file = filesInUse[i]
-            
-            # Append to batch lists
-            tmp = []
-            # print(branches["CleanJet_pt"])
-            for value in branches.values():
-                tmp += list(value)
 
-            features.append(tmp)
-            labels.append([ "WJets"   in file,
-                            "GluGluH" in file,
-                            "VBFH"    in file])
+            for _ in range(8):
+                if treePositions[i] >= nEntries[i] or len(features) >= batch_size: break
+                trees[i].GetEntry(treePositions[i])
+                treePositions[i] += 1
+
+                # Append to batch lists
+                tmp = []
+                # print(branches["CleanJet_pt"])
+                for value in branches.values():
+                    tmp += list(value)
+
+                tmp = np.array(tmp)#.reshape((31,))
+                features.append(tmp)
+
+                tmpLabels = [ int("WJets"   in file),
+                            int("GluGluH" in file),
+                            int("VBFH"    in file)]
+                tmpLabels = np.array(tmpLabels)#.reshape((3,))
+                labels.append(tmpLabels)
         
-        yield (features, labels)
+        features = np.array(features).reshape((batch_size, 31))
+        labels = np.array(labels).reshape((batch_size, 3))
+        yield ( tf.convert_to_tensor(features, dtype=tf.float32),
+                tf.convert_to_tensor(labels, dtype=tf.float32))
 
 
 
 if __name__ == "__main__":
     i = 0
     for features, labels in dataGenerator(64):
-        print(i)
+        print(type(features), type(labels))
+        print(features.shape, labels.shape)
         i+=1
-        if i > 100000: break
+        if i > 1: break
+    
+    print(next(dataGenerator(1)))
 
