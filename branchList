@@ -7,11 +7,11 @@ Lepton_pdgId
 CleanJet_pt
 CleanJet_eta
 CleanJet_phi
+CleanJet_mass
 CleanFatJet_pt
 CleanFatJet_eta
 CleanFatJet_phi
 CleanFatJet_tau21
-CleanFatJetPassMBoosted_WptOvHfatM
-CleanFatJetPassMBoosted_HlnFat_mass
-Hlnjj_mass
+CleanFatJet_mass
 largest_nonW_mjj
+event
