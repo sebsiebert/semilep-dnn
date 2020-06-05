@@ -24,6 +24,20 @@ import numpy as np
 
 
 def dataGenerator(batch_size, mode="train"):
+    if mode == "train":
+        offset = 5000
+        step = 2
+        maxPosition = 1e9
+    elif mode == "validate":
+        offset = 0
+        step = 1
+        maxPosition = 5000
+    elif mode == "test":
+        offset = 5001
+        step = 2
+        maxPosition = 1e9
+
+
     # FIXME: maybe add jet mass
     branchDict = OrderedDict([
     ('Lepton_pt',(2, 'f')), ('Lepton_eta',(2, 'f')),
@@ -50,14 +64,14 @@ def dataGenerator(batch_size, mode="train"):
     usedFiles = set()
 
     filesInUse = list()
-    filesInUse += random.sample(ggfSet, 2)
-    filesInUse += random.sample(vbfSet, 2)
-    filesInUse += random.sample(bgSet, 3)
+    filesInUse += random.sample(ggfSet, 3)
+    filesInUse += random.sample(vbfSet, 3)
+    filesInUse += random.sample(bgSet, 4)
     usedFiles.update(filesInUse)
 
     tfiles = [ROOT.TFile(basePath+x) for x in filesInUse]
     trees = [x.Get('Events') for x in tfiles]
-    treePositions = [0]*len(tfiles)
+    treePositions = [offset]*len(tfiles)
     nEntries = [x.GetEntries() for x in trees]
 
 
@@ -72,7 +86,8 @@ def dataGenerator(batch_size, mode="train"):
             i = random.randrange(len(trees))
 
             # check if I need to replace with new file
-            if treePositions[i] >= nEntries[i]:
+            if (treePositions[i] >= nEntries[i] 
+            or treePositions[i] >= maxPosition):
                 if i < 2:
                     if ggfSet == set():
                         ggfSet = {x for x in usedFiles if "GluGluH" in x}
@@ -93,7 +108,9 @@ def dataGenerator(batch_size, mode="train"):
                 tfiles[i].Close()
                 tfiles[i] = ROOT.TFile(basePath+filesInUse[i])
                 trees[i] = tfiles[i].Get('Events')
-                treePositions[i] = 0
+                treePositions[i] = offset
+                nEntries[i] = trees[i].GetEntries()
+                # print(filesInUse[i], nEntries[i])
             
             # get entry from selected file
             for key, value in branches.items():
@@ -102,9 +119,13 @@ def dataGenerator(batch_size, mode="train"):
             file = filesInUse[i]
 
             for _ in range(8):
-                if treePositions[i] >= nEntries[i] or len(features) >= batch_size: break
+                if (treePositions[i] >= nEntries[i] 
+                or treePositions[i] >= maxPosition
+                or len(features) >= batch_size):
+                    break
+
                 trees[i].GetEntry(treePositions[i])
-                treePositions[i] += 1
+                treePositions[i] += step
 
                 # Append to batch lists
                 tmp = []
@@ -112,19 +133,18 @@ def dataGenerator(batch_size, mode="train"):
                 for value in branches.values():
                     tmp += list(value)
 
-                tmp = np.array(tmp)#.reshape((31,))
+                tmp = np.array(tmp)
                 features.append(tmp)
 
                 tmpLabels = [ int("WJets"   in file),
-                            int("GluGluH" in file),
-                            int("VBFH"    in file)]
-                tmpLabels = np.array(tmpLabels)#.reshape((3,))
+                            int("GluGluH" in file)+int("VBFH" in file)]
+                tmpLabels = np.array(tmpLabels)
                 labels.append(tmpLabels)
         
-        features = np.array(features).reshape((batch_size, 31))
-        labels = np.array(labels).reshape((batch_size, 3))
-        yield ( tf.convert_to_tensor(features, dtype=tf.float32),
-                tf.convert_to_tensor(labels, dtype=tf.float32))
+        # features = np.array(features).reshape((batch_size, 31))
+        # labels = np.array(labels).reshape((batch_size, 3))
+        yield ( np.array(features),
+                np.array(labels))
 
 
 
